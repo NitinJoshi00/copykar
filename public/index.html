@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Copy Kar</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: #f5f7f4;
+      color: #26332b;
+      font: 16px/1.5 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page {
+      width: min(100% - 32px, 560px);
+      margin: 72px auto;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 32px;
+    }
+
+    .brand {
+      color: #26332b;
+      font-size: 19px;
+      font-weight: 750;
+      letter-spacing: -.04em;
+      text-decoration: none;
+    }
+
+    nav {
+      display: flex;
+      gap: 8px;
+    }
+
+    nav button {
+      border: 0;
+      padding: 8px 12px;
+      background: transparent;
+      color: #666;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    nav button.active {
+      color: #2f7049;
+      font-weight: 700;
+    }
+
+    main {
+      padding: 28px;
+      border: 1px solid #e2e9e2;
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: 0 14px 38px rgba(35, 61, 41, .07);
+    }
+
+    h1 {
+      margin: 0 0 22px;
+      color: #26332b;
+      font-size: 22px;
+      font-weight: 650;
+      letter-spacing: -.035em;
+    }
+
+    .field-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    textarea,
+    input {
+      width: 100%;
+      border: 1px solid #d8d8d8;
+      border-radius: 5px;
+      padding: 12px;
+      color: #222;
+      font: inherit;
+      outline: none;
+    }
+
+    textarea:focus,
+    input:focus {
+      border-color: #6d9b78;
+      box-shadow: 0 0 0 3px rgba(71, 131, 83, .1);
+    }
+
+    textarea {
+      min-height: 210px;
+      resize: vertical;
+    }
+
+    .paste,
+    .copy {
+      border: 1px solid #d8d8d8;
+      border-radius: 5px;
+      padding: 7px 11px;
+      background: #fff;
+      color: #333;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .paste:hover,
+    .copy:hover {
+      background: #f5f5f5;
+    }
+
+    .primary {
+      width: 100%;
+      margin-top: 16px;
+      border: 0;
+      border-radius: 7px;
+      padding: 12px;
+      background: #397b55;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 650;
+      cursor: pointer;
+      transition: background .15s, transform .15s;
+    }
+
+    .primary:hover:not(:disabled) {
+      background: #2f6947;
+      transform: translateY(-1px);
+    }
+
+    .primary:disabled {
+      background: #aab9ad;
+      cursor: default;
+    }
+
+    .code-input {
+      height: 50px;
+      font-size: 20px;
+      letter-spacing: 5px;
+      text-align: center;
+      text-transform: uppercase;
+    }
+
+    .message {
+      margin: 14px 0 0;
+      color: #a33328;
+      font-size: 13px;
+    }
+
+    .code-result {
+      margin: 8px 0 18px;
+      padding: 16px;
+      border: 1px solid #e0e9df;
+      border-radius: 7px;
+      background: #f7faf6;
+      text-align: center;
+    }
+
+    .code-result span {
+      display: block;
+      margin-bottom: 4px;
+      color: #666;
+      font-size: 13px;
+    }
+
+    .code-result strong {
+      color: #2f7049;
+      font-size: 30px;
+      letter-spacing: 5px;
+    }
+
+    .received-text {
+      min-height: 180px;
+      margin-bottom: 12px;
+      background: #fafafa;
+    }
+
+    .loading {
+      color: #666;
+      text-align: center;
+    }
+
+    @media (max-width: 520px) {
+      .page {
+        margin: 32px auto;
+      }
+
+      main {
+        padding: 20px;
+      }
+
+      header {
+        margin-bottom: 22px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="page">
+    <header>
+      <a class="brand" href="/share/send">Copy Kar</a>
+      <nav aria-label="Pages">
+        <button type="button" data-tab="send">Send</button>
+        <button type="button" data-tab="receive">Receive</button>
+      </nav>
+    </header>
+    <main id="app"></main>
+  </div>
+
+  <script>
+    // Backend contract:
+    //   POST /api/share/send          { text }  -> { code: "A1B2C3", message }
+    //   GET  /api/share/receive/:code           -> { text: "...", message }
+    // Page routes (served by Express): /share/send and /share/code/:code
+    const API_BASE = "/api/share";
+    const app = document.getElementById("app");
+    let tab = "send";
+    let draft = "";
+    let errorMessage = "";
+    let newCode = "";
+    let receivedText = null;
+    let loadedCode = "";
+    let busy = false;
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+    }
+
+    function currentCode() {
+      const parts = location.pathname.split("/").filter(Boolean);
+      const i = parts.lastIndexOf("code");
+      return i >= 0 && /^[A-Za-z0-9]{6}$/.test(parts[i + 1] || "") ? parts[i + 1] : "";
+    }
+
+    function go(path) {
+      try { history.pushState({}, "", path); } catch (_) { }
+      errorMessage = "";
+      render();
+    }
+
+    function renderNav() {
+      document.querySelectorAll("nav button").forEach((button) => {
+        button.classList.toggle("active", button.dataset.tab === tab);
+      });
+    }
+
+    function renderSend() {
+      if (newCode) {
+        app.innerHTML = `<h1>Your code</h1>
+          <div class="code-result"><span>Share this six-character code</span><strong>${escapeHtml(newCode)}</strong></div>
+          <button class="primary" type="button" data-action="new">Share more text</button>`;
+        return;
+      }
+      app.innerHTML = `<h1>Send text</h1>
+        <form id="send-form">
+          <div class="field-top"><label for="text">Your text</label><button class="paste" type="button" data-action="paste">Paste</button></div>
+          <textarea id="text" maxlength="20000" placeholder="Type or paste your text here" required>${escapeHtml(draft)}</textarea>
+          ${errorMessage ? `<p class="message" role="alert">${escapeHtml(errorMessage)}</p>` : ""}
+          <button class="primary" id="send-button" type="submit" ${draft.trim() ? "" : "disabled"}>Create code</button>
+        </form>`;
+      const text = document.getElementById("text");
+      const button = document.getElementById("send-button");
+      text.addEventListener("input", () => {
+        draft = text.value;
+        button.disabled = !draft.trim() || busy;
+      });
+      document.getElementById("send-form").addEventListener("submit", sendText);
+    }
+
+    function renderReceive() {
+      app.innerHTML = `<h1>Receive text</h1>
+        <form id="receive-form">
+          <label for="code">Six-character code</label>
+          <input class="code-input" id="code" type="text" inputmode="text" maxlength="6" pattern="[A-Za-z0-9]{6}" autocomplete="one-time-code" placeholder="ABC123" required>
+          ${errorMessage ? `<p class="message" role="alert">${escapeHtml(errorMessage)}</p>` : ""}
+          <button class="primary" id="receive-button" type="submit" disabled>Get text</button>
+        </form>`;
+      const input = document.getElementById("code");
+      const button = document.getElementById("receive-button");
+      input.addEventListener("input", () => {
+        input.value = input.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 6);
+        button.disabled = input.value.length !== 6;
+      });
+      document.getElementById("receive-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        if (/^[A-Za-z0-9]{6}$/.test(input.value)) {
+          tab = "receive";
+          receivedText = null;
+          loadedCode = "";
+          go(`/share/code/${input.value}`);
+        }
+      });
+      input.focus();
+    }
+
+    function renderCode(code) {
+      if (busy) {
+        app.innerHTML = `<p class="loading">Loading text…</p>`;
+      } else if (errorMessage) {
+        app.innerHTML = `<h1>Text unavailable</h1><p class="message">${escapeHtml(errorMessage)}</p><button class="primary" type="button" data-action="another">Enter another code</button>`;
+      } else {
+        app.innerHTML = `<h1>Shared text</h1>
+          <textarea class="received-text" id="received-text" readonly>${escapeHtml(receivedText || "")}</textarea>
+          <button class="primary" type="button" data-action="copy">Copy</button>`;
+      }
+    }
+
+    function render() {
+      const code = currentCode();
+      renderNav();
+      if (code) {
+        tab = "receive";
+        renderNav();
+        if (loadedCode !== code) {
+          loadedCode = code;
+          busy = true;
+          renderCode(code);
+          loadText(code);
+          return;
+        }
+        renderCode(code);
+      } else if (tab === "send") renderSend();
+      else renderReceive();
+    }
+
+    async function sendText(event) {
+      event.preventDefault();
+      if (!draft.trim() || busy) return;
+      busy = true;
+      errorMessage = "";
+      const button = document.getElementById("send-button");
+      button.disabled = true;
+      button.textContent = "Creating…";
+      try {
+        const response = await fetch(`${API_BASE}/send`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: draft })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || `Could not create a code (HTTP ${response.status}).`);
+        if (!/^[A-Za-z0-9]{6}$/.test(String(data.code || ""))) throw new Error("The server returned an invalid code.");
+        newCode = String(data.code);
+        draft = "";
+      } catch (error) {
+        errorMessage = error instanceof TypeError ? "Could not connect to the server." : error.message;
+      } finally {
+        busy = false;
+        render();
+      }
+    }
+
+    async function loadText(code) {
+      try {
+        const response = await fetch(`${API_BASE}/receive/${encodeURIComponent(code)}`, { headers: { "Accept": "application/json" } });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.message || "Code not found. Check the code and try again.");
+        if (typeof data.text !== "string") throw new Error("The server returned an invalid response.");
+        receivedText = data.text;
+      } catch (error) {
+        errorMessage = error instanceof TypeError ? "Could not connect to the server." : error.message;
+      } finally {
+        busy = false;
+        render();
+      }
+    }
+
+    async function pasteText() {
+      try {
+        const value = await navigator.clipboard.readText();
+        const text = document.getElementById("text");
+        const room = Math.max(0, text.maxLength - text.value.length);
+        text.value += value.slice(0, room);
+        draft = text.value;
+        document.getElementById("send-button").disabled = !draft.trim();
+        text.focus();
+        text.setSelectionRange(text.value.length, text.value.length);
+      } catch (_) {
+        errorMessage = "Clipboard access is unavailable. Paste your text into the box instead.";
+        render();
+      }
+    }
+
+    async function copyText() {
+      const value = receivedText || "";
+      try {
+        await navigator.clipboard.writeText(value);
+      } catch (_) {
+        const text = document.getElementById("received-text");
+        text.select();
+        document.execCommand("copy");
+      }
+      const button = app.querySelector('[data-action="copy"]');
+      button.textContent = "Copied";
+      setTimeout(() => { if (button.isConnected) button.textContent = "Copy"; }, 1200);
+    }
+
+    document.querySelector("nav").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-tab]");
+      if (!button) return;
+      tab = button.dataset.tab;
+      newCode = "";
+      errorMessage = "";
+      go("/share/send");
+    });
+
+    app.addEventListener("click", (event) => {
+      const action = event.target.closest("[data-action]")?.dataset.action;
+      if (action === "paste") pasteText();
+      if (action === "copy") copyText();
+      if (action === "new") { newCode = ""; tab = "send"; render(); }
+      if (action === "another") { errorMessage = ""; tab = "receive"; go("/share/send"); }
+    });
+
+    window.addEventListener("popstate", () => {
+      errorMessage = "";
+      receivedText = null;
+      loadedCode = "";
+      busy = false;
+      render();
+    });
+
+    if (/^https?:$/.test(location.protocol) && !location.pathname.includes("/share/")) {
+      history.replaceState({}, "", "/share/send");
+    }
+    render();
+  </script>
+</body>
+
+</html>
