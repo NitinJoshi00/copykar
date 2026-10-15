@@ -1,5 +1,5 @@
 const shareModel = require('../models/share.model.js')
-const shareCode = require('../utils/generateShareCode.utils.js')
+const { generateShareCode } = require('../utils/generateShareCode.utils.js')
 
 
 async function send(req, res) {
@@ -11,7 +11,7 @@ async function send(req, res) {
             });
         }
 
-        const code = await shareCode();
+        const code = generateShareCode();
 
 
 

@@ -9,13 +9,13 @@ app.use(express.json());
 const shareRoutes = require("./routes/share.routes.js");
 app.use("/api/share", shareRoutes);
 
-// Serve frontend/index.html and its static files
-const frontendPath = path.join(__dirname, "../../frontend");
-app.use(express.static(frontendPath));
+// Serve public files locally. Vercel serves the public directory from its CDN.
+const publicPath = path.join(__dirname, "../public");
+app.use(express.static(publicPath));
 
 // Return the frontend for browser routes
 app.get(["/share/send", "/share/code/:code"], (req, res) => {
-  res.sendFile(path.join(frontendPath, "index.html"));
+  res.sendFile(path.join(publicPath, "index.html"));
 });
 
 module.exports = app;
