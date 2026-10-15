@@ -29,10 +29,12 @@ async function send(req, res) {
 
 
     } catch (error) {
+        console.error("Share creation failed:", error);
         return res.status(500).json({
             message: "Internal Server Error",
             error
         });
+
     }
 
 
